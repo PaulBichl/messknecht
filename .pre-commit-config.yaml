@@ -1,0 +1,26 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+# Run `pre-commit autoupdate --freeze` to update all hooks to the latest revision
+exclude: |
+  (?x)^(
+    .gitlab-ci.yml|
+    .*/_static/.*|
+  )$
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 99abe27a5a16f301d9e0a3828181399dfbf54ebd  # frozen: v0.11.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # frozen: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        types: [text]
+      - id: end-of-file-fixer
+        types: [text]
+      # - id: check-added-large-files
+      - id: check-yaml

@@ -1,0 +1,240 @@
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "messknecht"
+version = "0.1.0"
+description = "template for python projects"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Paul Bichl", email = "paul.bichl@edu.fh-joanneum.at" },
+]
+license = { text = "MIT" }
+keywords = ["template", "python"]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "ruff",           # code formatter and linter
+    "mypy",           # type checking
+    "pytest",         # testing framework
+    "pytest-cov",     # coverage plugin for pytest
+]
+
+###########################################
+# Tool specific configurations comes here #
+###########################################
+
+#########
+# Hatch #
+#########
+[tool.hatch]
+# Hatch is a modern, extensible Python project manager
+# Read more at https://hatch.pypa.io
+# Why Hatch? -> Why not? -> https://hatch.pypa.io/latest/why/
+
+[tool.hatch.envs.hatch-uv]
+dependencies = [
+  "uv>=0.6.16",
+]
+
+# https://hatch.pypa.io/latest/config/environment/overview/
+[tool.hatch.envs.default]
+installer = "uv"
+python = "3.12"  # Specifies the Python version for the default development environment
+features = ["dev"]
+dependencies = [
+    "pytest",
+    "pytest-cov",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "ipykernel",
+]
+
+# https://hatch.pypa.io/latest/config/environment/overview/#scripts
+[tool.hatch.envs.default.scripts]
+
+# Cleans files that are ignored by Git
+clean = [
+    "git clean -ffX .tmp",  # Temporary files from testing
+    "git clean -fX src/**/version.py",
+]
+
+# Runs pytest (testing framework)
+test = "pytest {args:tests}"
+
+# Runs mypy
+type = "mypy --install-types --non-interactive src {args}"
+
+# Runs ruff without auto-fixes
+style = "ruff check {args:.}"
+
+# Runs pre-commit (includes ruff with auto-fixes and other stuff) on all files
+fix = [
+    "pre-commit install",
+    "pre-commit run {args:--all-files}",
+]
+
+# Updates all pre-commit hooks to the latest revision (see .pre-commit-config) and installs them
+update-precommit = [
+    "pre-commit autoupdate --freeze",
+    "pre-commit install",
+]
+
+[tool.hatch.envs.all]
+dev-mode = true  # local usage -> editable
+
+# https://hatch.pypa.io/latest/config/environment/advanced/#matrix
+[[tool.hatch.envs.all.matrix]]
+python = ["3.12"]
+
+[tool.hatch.envs.ciall]
+dev-mode = false  # CI usage -> non-editable (to make sure that the built package file is tested)
+
+[[tool.hatch.envs.ciall.matrix]]
+python = ["3.12"]
+
+# An environment for CI only to speed up env creation for certain jobs
+[tool.hatch.envs.ci]
+skip-install = true
+
+# To allow direct dependencies
+[tool.hatch.metadata]
+allow-direct-references = true
+
+# Tell hatchling where the importable package lives (setup.sh rewrites the path)
+[tool.hatch.build.targets.wheel]
+packages = ["src/messknecht"]
+
+
+########
+# Ruff #
+########
+[tool.ruff]
+# https://docs.astral.sh/ruff/settings
+target-version = "py312"
+line-length = 120
+fix = false  # Allow autofix for all enabled rules (when --fix) is provided.
+show-fixes = true
+unsafe-fixes = true
+
+[tool.ruff.lint]
+# https://docs.astral.sh/ruff/settings/#select
+select = [
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # pyflakes
+    "I", # isort
+    "UP", # pyupgrade
+    "B", # bugbear
+    "C4", # flake8-comprehensions
+    "DTZ", # flake8-datetimez
+    "EM", # flake8-errmsg
+    "FA", # flake8-future-annotations
+    "PIE", # flake8-pie
+    "PT", # flake8-pytest-style
+    "RSE", # flake8-raise
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "TID252", # flake8-tidy-imports -> convert relative-imports
+    "TC", # flake8-type-checking
+    "PLE", # Pylint - errors
+    "PLW", # Pylint - warnings
+    "PLC", # Pylint - conventions
+    "RUF", # Ruff-specific rules
+    "NPY", # NumPy-specific rules
+    "N", # pep8-naming
+
+]
+# https://docs.astral.sh/ruff/settings/#ignore
+ignore = [
+    "B007",  # Loop control variable not used within loop body
+    "DTZ005", # datetime without timezone argument
+    "E501",  # Line too long (> 120)
+    "E722",  # Do not use bare except
+    "F401",  # unused-import
+    "F821",  # undefined name, especially for ScriptingWidget scripts (e.g. app)
+    "N806",  # Variable in function should be lowercase
+    "N803",  # Argument name should be lowercase
+    "N815",  # Variable name in class scope should not be mixedCase
+    "N816",  # Variable name in global scope should not be mixedCase
+    "N999",  # Module name not following snake_case naming convention
+    "PLC0206",  # dictionary value usage without calling .items()
+    "PLW2901",  # loop variable overwritten
+    "RUF012",   # Mutable default values used
+]
+# https://docs.astral.sh/ruff/settings/#unfixable
+unfixable = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["messknecht"]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+
+########
+# MYPY #
+########
+# https://justincaustin.com/blog/mypy-tips-and-tricks/
+[tool.mypy]
+# disallow_any_generics = true
+# disallow_incomplete_defs = true
+# disallow_untyped_calls = true
+# disallow_untyped_decorators = true
+# disallow_untyped_defs = true
+follow_imports = "normal"
+ignore_missing_imports = true
+no_implicit_reexport = true
+show_error_codes = true
+show_error_context = true
+strict_equality = true
+strict_optional = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unused_ignores = true
+
+
+#########
+# Pytest #
+#########
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",  # show summary of all test outcomes
+]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+]
+
+
+##########
+# Coverage #
+##########
+[tool.coverage.run]
+source = ["src"]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+precision = 2
