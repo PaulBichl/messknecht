@@ -6,14 +6,18 @@ build-backend = "hatchling.build"
 [project]
 name = "messknecht"
 version = "0.1.0"
-description = "template for python projects"
+description = "Lab Automation Framework"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
     { name = "Paul Bichl", email = "paul.bichl@edu.fh-joanneum.at" },
 ]
 license = { text = "MIT" }
-keywords = ["template", "python"]
+keywords = ["lab-automation", "visa", "scpi", "instrument", "measurement"]
+dependencies = [
+    "numpy>=1.26",
+    "pyvisa>=1.13",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -53,6 +57,7 @@ dependencies = [
     "pandas",
     "matplotlib",
     "ipykernel",
+    "pyvisa",
 ]
 
 # https://hatch.pypa.io/latest/config/environment/overview/#scripts
@@ -67,8 +72,10 @@ clean = [
 # Runs pytest (testing framework)
 test = "pytest {args:tests}"
 
-# Runs mypy
-type = "mypy --install-types --non-interactive src {args}"
+# Runs mypy. Includes tests/ and examples/: neither the lab tests nor the
+# examples run without hardware, so mypy is what catches a wrong driver method
+# or keyword argument in them.
+type = "mypy --install-types --non-interactive src tests examples {args}"
 
 # Runs ruff without auto-fixes
 style = "ruff check {args:.}"
@@ -154,10 +161,8 @@ select = [
 ignore = [
     "B007",  # Loop control variable not used within loop body
     "DTZ005", # datetime without timezone argument
-    "E501",  # Line too long (> 120)
+    "E501",  # Line too long: handled by the formatter (line-length above), not enforced by the linter.
     "E722",  # Do not use bare except
-    "F401",  # unused-import
-    "F821",  # undefined name, especially for ScriptingWidget scripts (e.g. app)
     "N806",  # Variable in function should be lowercase
     "N803",  # Argument name should be lowercase
     "N815",  # Variable name in class scope should not be mixedCase
@@ -169,6 +174,9 @@ ignore = [
 ]
 # https://docs.astral.sh/ruff/settings/#unfixable
 unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*" = ["I002"]  # plain user scripts: no `from __future__ import annotations` boilerplate
 
 [tool.ruff.lint.isort]
 known-first-party = ["messknecht"]
@@ -198,6 +206,16 @@ strict_optional = true
 warn_redundant_casts = true
 warn_return_any = true
 warn_unused_ignores = true
+
+
+################
+# Basedpyright #
+################
+# Editor language server (VS Code / Code - OSS extension: detachhead.basedpyright)
+[tool.basedpyright]
+venvPath = ".hatch"
+venv = "messknecht"  # the hatch env that has messknecht installed editable
+typeCheckingMode = "standard"  # basedpyright's default "recommended" is very noisy; mypy is the real checker
 
 
 #########
