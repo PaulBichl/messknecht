@@ -137,6 +137,8 @@ class _KeysightDSOX3000TSimulation(SimulationBackend):
             )
         if normalized.startswith(("WAV:POIN", "WAVEFORM:POIN")):
             return str(self._points())
+        if normalized.startswith(("TIM:MODE", "TIMEBASE:MODE")):
+            return "MAIN"
         return None
 
     def handle_query_binary(self, command: str) -> bytes | None:
@@ -220,6 +222,14 @@ class KeysightDSOX3000TLowLevel(VisaInstrument):
     def set_timebase_position(self, seconds: float) -> None:
         """``:TIMebase:POSition <pos>`` - delay between trigger and screen center."""
         self.write(f":TIMebase:POSition {scpi_number(seconds)}")
+
+    def get_timebase_mode(self) -> str:
+        """``:TIMebase:MODE?`` - ``MAIN``, ``WIND``, ``XY`` or ``ROLL``."""
+        return self.query(":TIMebase:MODE?").upper()
+
+    def set_timebase_mode(self, mode: str) -> None:
+        """``:TIMebase:MODE {MAIN|WINDow|XY|ROLL}``."""
+        self.write(f":TIMebase:MODE {mode}")
 
     def set_trigger_mode_edge(self) -> None:
         """``:TRIGger:MODE EDGE``."""
@@ -354,13 +364,21 @@ class KeysightDSOX3000T(InstrumentApplication[KeysightDSOX3000TLowLevel]):
         """Arm a single acquisition, then stop."""
         self._lowlevel.single()
 
-    def digitize(self, *channels: int | str) -> None:
+    def digitize(self, *channels: int | str, timeout_ms: float = TRANSFER_TIMEOUT_MS) -> None:
         """Acquire the given channels (all displayed ones if empty) and stop.
 
         This is the recommended way to get a consistent acquisition before
-        downloading waveform data.
+        downloading waveform data. ``:DIGitize`` is rejected in Roll mode, so
+        the timebase is switched to Normal (``MAIN``) mode first if needed.
+        Waits until the acquisition is complete (at most ``timeout_ms``).
         """
-        self._lowlevel.digitize(*(self._source_name(channel) for channel in channels))
+        lowlevel = self._lowlevel
+        if lowlevel.get_timebase_mode() == "ROLL":
+            lowlevel.set_timebase_mode("MAIN")
+        with lowlevel.temporary_timeout(timeout_ms):
+            lowlevel.digitize(*(self._source_name(channel) for channel in channels))
+            # The scope answers the error query only once the acquisition is done.
+            self.check_errors()
 
     def autoscale(self) -> None:
         """Automatic setup for the connected signals (like the front panel key)."""
@@ -498,7 +516,7 @@ class KeysightDSOX3000T(InstrumentApplication[KeysightDSOX3000TLowLevel]):
             msg = "At least one channel is required"
             raise ValueError(msg)
         if acquire:
-            self.digitize(*channel_list)
+            self.digitize(*channel_list, timeout_ms=timeout_ms)
         waveforms = [
             self.get_waveform(channel, points=points, points_mode=points_mode, timeout_ms=timeout_ms)
             for channel in channel_list
@@ -548,15 +566,20 @@ class KeysightDSOX3000T(InstrumentApplication[KeysightDSOX3000TLowLevel]):
         return file_path
 
     # -- measurements ----------------------------------------------------------------------
+    # A measurement query waits for a complete acquisition, which takes longer
+    # than the default VISA timeout on slow timebases (10 divisions of 500 ms).
 
     def measure_vpp(self, channel: int | str = 1) -> float:
         """Peak-to-peak voltage of the displayed signal."""
-        return self._lowlevel.measure_vpp(self._source_name(channel))
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_vpp(self._source_name(channel))
 
     def measure_frequency(self, channel: int | str = 1) -> float:
         """Frequency of the displayed signal."""
-        return self._lowlevel.measure_frequency(self._source_name(channel))
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_frequency(self._source_name(channel))
 
     def measure_vaverage(self, channel: int | str = 1) -> float:
         """Average voltage of the displayed signal."""
-        return self._lowlevel.measure_vaverage(self._source_name(channel))
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_vaverage(self._source_name(channel))

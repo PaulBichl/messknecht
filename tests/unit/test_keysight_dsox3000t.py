@@ -128,6 +128,17 @@ def test_acquisition_control_commands(sim_scope: KeysightDSOX3000T) -> None:
         assert command in log
 
 
+def test_digitize_leaves_roll_mode(sim_scope: KeysightDSOX3000T, monkeypatch: pytest.MonkeyPatch) -> None:
+    sim_scope.digitize(1)
+    assert ":TIMebase:MODE MAIN" not in _log(sim_scope)
+
+    monkeypatch.setattr(sim_scope.lowlevel, "get_timebase_mode", lambda: "ROLL")
+    start = len(_log(sim_scope))
+    sim_scope.digitize(1)
+    log = _log(sim_scope)[start:]
+    assert log.index(":TIMebase:MODE MAIN") < log.index(":DIGitize CHANnel1")
+
+
 def test_measurements_return_floats(sim_scope: KeysightDSOX3000T) -> None:
     assert isinstance(sim_scope.measure_vpp(1), float)
     assert sim_scope.measure_frequency(1) == pytest.approx(1000.0, abs=1.0)
