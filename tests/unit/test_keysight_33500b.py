@@ -132,9 +132,22 @@ def test_load_arbitrary_csv_missing_file(sim_wfg: Keysight33500B, tmp_path: Path
 
 def test_set_output_load(sim_wfg: Keysight33500B) -> None:
     sim_wfg.set_output_load(50)
+    sim_wfg.set_output_load("highz", channel=2)
     sim_wfg.set_output_load("INFinity")
     log = _log(sim_wfg)
     assert "OUTPut1:LOAD 50" in log
+    assert "OUTPut2:LOAD INFINITY" in log
     assert "OUTPut1:LOAD INFINITY" in log
     with pytest.raises(ValueError, match="Invalid load"):
         sim_wfg.set_output_load("HEAVY")
+    with pytest.raises(ValueError, match=r"1\.\.10000 Ohm"):
+        sim_wfg.set_output_load(0)
+
+
+def test_get_output_load(sim_wfg: Keysight33500B) -> None:
+    simulation = sim_wfg.lowlevel.simulation
+    assert simulation is not None
+    responses = {"OUTPut1:LOAD?": "+5.000000000000000E+01", "OUTPut2:LOAD?": "+9.900000000000000E+37"}
+    simulation.backend.handle_query = responses.get  # type: ignore[method-assign,assignment]
+    assert sim_wfg.get_output_load() == 50.0
+    assert sim_wfg.get_output_load(channel=2) == math.inf

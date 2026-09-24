@@ -21,6 +21,7 @@ Usage::
 
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -35,6 +36,14 @@ if TYPE_CHECKING:
 #: Arbitrary waveform size limits of the 33500B series (points).
 ARB_MIN_POINTS = 8
 ARB_MAX_POINTS = 1_000_000
+
+#: Output termination range (Ohm); anything else must be INFinity (high Z).
+LOAD_MIN_OHMS = 1.0
+LOAD_MAX_OHMS = 10_000.0
+#: ``OUTPut<n>:LOAD?`` answers high Z with 9.9E+37; values above this mean infinite.
+_LOAD_INFINITE_THRESHOLD = 9.0e37
+#: Spellings for "high impedance" accepted by the application layer.
+_HIGH_Z_KEYWORDS = {"HIGHZ", "HIGH_Z", "HI-Z", "HIZ", "INF", "INFINITY"}
 
 _ARB_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,11}")
 _STANDARD_FUNCTIONS = ("SINusoid", "SQUare", "RAMP", "PULSe", "NOISe", "DC", "PRBS", "ARB")
@@ -173,7 +182,15 @@ class Keysight33500BLowLevel(VisaInstrument):
                 raise ValueError(msg)
             self.write(f"OUTPut{channel}:LOAD {keyword}")
         else:
+            if not LOAD_MIN_OHMS <= ohms <= LOAD_MAX_OHMS:
+                msg = f"Load must be {LOAD_MIN_OHMS:g}..{LOAD_MAX_OHMS:g} Ohm or 'INFinity', got {ohms:g}"
+                raise ValueError(msg)
             self.write(f"OUTPut{channel}:LOAD {scpi_number(ohms)}")
+
+    def get_output_load(self, channel: int) -> float:
+        """``OUTPut<n>:LOAD?`` - high Z is reported as 9.9E+37."""
+        self._source(channel)
+        return self.query_float(f"OUTPut{channel}:LOAD?", sim_value=50.0)
 
 
 class Keysight33500B(InstrumentApplication[Keysight33500BLowLevel]):
@@ -390,13 +407,31 @@ class Keysight33500B(InstrumentApplication[Keysight33500BLowLevel]):
         """Switch the channel output on/off."""
         self._lowlevel.set_output(channel, on)
 
-    def set_output_load(self, ohms: float | str, channel: int = 1) -> None:
-        """Set the expected output termination (e.g. ``50`` or ``"INFinity"``).
+    def set_output_load(self, load: float | str = 50, channel: int = 1) -> None:
+        """Set the expected output termination: ``50`` (default) or ``"highz"``.
 
-        The displayed/programmed amplitude only matches reality if this
-        matches the actual load.
+        The generator always has a fixed 50 Ohm source impedance; this only
+        tells it which load to expect, so the programmed amplitude/offset
+        appear at the load. Set ``50`` for a 50 Ohm terminated cable and
+        ``"highz"`` (also ``"INFinity"``) for a scope/high impedance input -
+        a mismatch gives double or half the expected voltage. Any value
+        from 1 to 10 000 Ohm is accepted, too.
+
+        Raises:
+            ValueError: If ``load`` is neither a valid resistance nor high Z.
         """
-        self._lowlevel.set_output_load(channel, ohms)
+        if isinstance(load, str):
+            if load.strip().upper() not in _HIGH_Z_KEYWORDS:
+                msg = f"Invalid load {load!r}; use a resistance in Ohm (e.g. 50) or 'highz'"
+                raise ValueError(msg)
+            load = "INFinity"
+        self._lowlevel.set_output_load(channel, load)
+        self.check_errors()
+
+    def get_output_load(self, channel: int = 1) -> float:
+        """Return the expected output termination in Ohm (``math.inf`` for high Z)."""
+        ohms = self._lowlevel.get_output_load(channel)
+        return math.inf if ohms >= _LOAD_INFINITE_THRESHOLD else ohms
 
 
 def _read_waveform_file(path: Path) -> list[float]:

@@ -5,6 +5,7 @@ from messknecht import Keysight33500B
 wfg = Keysight33500B()
 wfg.initialize("TCPIP0::192.168.1.20::INSTR", reset=True)
 
+wfg.set_output_load("highz")  # scope input; use 50 for a 50 Ohm terminated load
 wfg.configure_sine(frequency=1e3, amplitude=1.0)
 wfg.output(True)
 input("Sine on CH1 - press Enter for the arb...")

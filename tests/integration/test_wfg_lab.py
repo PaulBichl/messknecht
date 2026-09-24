@@ -61,5 +61,12 @@ def test_arbitrary_waveform(wfg: Keysight33500B) -> None:
     assert wfg.lowlevel.get_function(1).upper().startswith("ARB")
 
 
+def test_output_load(wfg: Keysight33500B) -> None:
+    wfg.set_output_load("highz")
+    assert wfg.get_output_load() == math.inf
+    wfg.set_output_load(50)
+    assert wfg.get_output_load() == pytest.approx(50.0)
+
+
 def test_no_pending_instrument_errors(wfg: Keysight33500B) -> None:
     wfg.check_errors()
