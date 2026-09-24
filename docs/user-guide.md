@@ -155,12 +155,19 @@ with Keysight33500B() as wfg:
     wfg.configure_ramp(frequency=100.0, amplitude=2.0, symmetry=50.0)  # triangle
     wfg.configure_dc(offset=1.5)
 
-    wfg.set_output_load(50)        # or "INFinity" - affects the real amplitude!
+    wfg.set_output_load(50)        # 50 Ohm terminated load (default)
+    wfg.set_output_load("highz")   # scope / high impedance input
+    wfg.get_output_load()          # -> 50.0 or math.inf
     wfg.output(True)
 
     # arbitrary waveform from CSV (one value per line, or comma separated)
     wfg.load_arbitrary_csv("my_arb.csv", sample_rate=100e3, amplitude=1.0)
 ```
+
+Output load: the generator always has a 50 Ω source impedance. The load
+setting only tells it what is connected, so the programmed amplitude and
+offset appear at the load. If the setting is wrong, you get twice
+(`50` into high Z) or half (`"highz"` into 50 Ω) the voltage.
 
 Arb notes: samples are normalized to −1…+1 (`normalize=False` to forbid),
 8…1,000,000 points, repetition rate = `sample_rate / number_of_points`.
