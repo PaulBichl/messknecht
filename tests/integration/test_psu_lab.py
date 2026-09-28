@@ -2,7 +2,7 @@
 
 Run with real hardware (nothing should be connected to the outputs)::
 
-    hatch run test tests/integration/test_psu_lab.py --psu "ASRL/dev/ttyACM0::INSTR" -s
+    hatch run test tests/integration/test_psu_lab.py --psu "TCPIP0::192.168.125.22::9221::SOCKET" -s
 """
 
 from __future__ import annotations
