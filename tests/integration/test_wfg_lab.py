@@ -68,5 +68,13 @@ def test_output_load(wfg: Keysight33500B) -> None:
     assert wfg.get_output_load() == pytest.approx(50.0)
 
 
+def test_phase(wfg: Keysight33500B) -> None:
+    wfg.configure_sine(frequency=1e3, amplitude=1.0)
+    wfg.set_phase(90.0)
+    assert wfg.get_phase() == pytest.approx(90.0)
+    wfg.set_phase(0.0)
+    assert wfg.get_phase() == pytest.approx(0.0)
+
+
 def test_no_pending_instrument_errors(wfg: Keysight33500B) -> None:
     wfg.check_errors()

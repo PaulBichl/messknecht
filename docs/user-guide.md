@@ -111,6 +111,10 @@ Also available per channel: `ovp`, `ocp` (protection trip points),
 `current_range` (`CurrentRange.LOW` = 500 mA range, 0.1 mA meter resolution
 and 0.01 mA setting resolution; the output must be off to change it).
 
+Over LAN the PSU must be opened as a raw socket on port 9221:
+`TCPIP0::<ip>::9221::SOCKET`. Its `TCPIP0::<ip>::INSTR` (VXI-11) resource
+only supports LXI discovery: every query returns the `*IDN?` string.
+
 ## Oscilloscope — Keysight DSO-X 3014T
 
 Set up signals, trigger and resolution interactively at the scope — the driver
@@ -153,6 +157,7 @@ with Keysight33500B() as wfg:
     wfg.configure_sine(frequency=1e3, amplitude=1.0, offset=0.0)
     wfg.configure_square(frequency=1e3, amplitude=1.0, duty_cycle=25.0)
     wfg.configure_ramp(frequency=100.0, amplitude=2.0, symmetry=50.0)  # triangle
+    wfg.set_phase(90.0)            # phase offset in degrees (-360 ... +360)
     wfg.configure_dc(offset=1.5)
 
     wfg.set_output_load(50)        # 50 Ohm terminated load (default)
@@ -234,6 +239,7 @@ print(scope.lowlevel.query(":ACQuire:TYPE?"))
   timeout (big transfers, slow measurements): pass `timeout=...` in the option
   string, or check that the instrument isn't waiting for a trigger.
 - **Raw TCP sockets** (`TCPIP0::host::5025::SOCKET`) work; prefer `::INSTR`
-  resources when available.
+  resources when available. Exception: the PL303QMD needs
+  `TCPIP0::<ip>::9221::SOCKET` (see its section).
 - **Debugging SCPI traffic**: `error_check=true` in the option string raises
   immediately on the command that the instrument rejected.

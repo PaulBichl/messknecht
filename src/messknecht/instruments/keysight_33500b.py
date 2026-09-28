@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 ARB_MIN_POINTS = 8
 ARB_MAX_POINTS = 1_000_000
 
+#: Waveform phase offset range (degrees).
+PHASE_MIN_DEGREES = -360.0
+PHASE_MAX_DEGREES = 360.0
+
 #: Output termination range (Ohm); anything else must be INFinity (high Z).
 LOAD_MIN_OHMS = 1.0
 LOAD_MAX_OHMS = 10_000.0
@@ -113,6 +117,14 @@ class Keysight33500BLowLevel(VisaInstrument):
     def get_offset(self, channel: int) -> float:
         """``[SOURce<n>:]VOLTage:OFFSet?``."""
         return self.query_float(f"{self._source(channel)}:VOLTage:OFFSet?", sim_value=0.0)
+
+    def set_phase(self, channel: int, degrees: float) -> None:
+        """``[SOURce<n>:]PHASe <angle>`` (unit per ``UNIT:ANGLe``, default degrees)."""
+        self.write(f"{self._source(channel)}:PHASe {scpi_number(degrees)}")
+
+    def get_phase(self, channel: int) -> float:
+        """``[SOURce<n>:]PHASe?``."""
+        return self.query_float(f"{self._source(channel)}:PHASe?", sim_value=0.0)
 
     def set_square_duty_cycle(self, channel: int, percent: float) -> None:
         """``[SOURce<n>:]FUNCtion:SQUare:DCYCle <percent>``."""
@@ -294,6 +306,27 @@ class Keysight33500B(InstrumentApplication[Keysight33500BLowLevel]):
         """Configure a DC level of ``offset`` Volts."""
         self._configure_standard("DC", channel, None, None, offset)
         self.check_errors()
+
+    def set_phase(self, degrees: float, channel: int = 1) -> None:
+        """Set the waveform phase offset in degrees (-360 ... +360).
+
+        The offset is relative to the Sync output (and, on two channel
+        models, to the other channel after ``PHASe:SYNChronize``).
+
+        Raises:
+            ValueError: If ``degrees`` is out of range.
+        """
+        if not PHASE_MIN_DEGREES <= degrees <= PHASE_MAX_DEGREES:
+            msg = f"Phase must be {PHASE_MIN_DEGREES:g}..{PHASE_MAX_DEGREES:g} degrees, got {degrees:g}"
+            raise ValueError(msg)
+        self._lowlevel.write("UNIT:ANGLe DEGree")
+        self._lowlevel.set_phase(channel, degrees)
+        self.check_errors()
+
+    def get_phase(self, channel: int = 1) -> float:
+        """Return the waveform phase offset in degrees."""
+        self._lowlevel.write("UNIT:ANGLe DEGree")
+        return self._lowlevel.get_phase(channel)
 
     # -- arbitrary waveforms -------------------------------------------------------
 
