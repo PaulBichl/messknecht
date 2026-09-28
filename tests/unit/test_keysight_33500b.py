@@ -46,6 +46,18 @@ def test_configure_ramp_and_dc_and_noise(sim_wfg: Keysight33500B) -> None:
     assert "SOURce1:VOLTage:OFFSet 1.25" in log
 
 
+def test_set_phase(sim_wfg: Keysight33500B) -> None:
+    sim_wfg.set_phase(90.0)
+    sim_wfg.set_phase(-45.5, channel=2)
+    log = _log(sim_wfg)
+    assert "UNIT:ANGLe DEGree" in log
+    assert "SOURce1:PHASe 90" in log
+    assert "SOURce2:PHASe -45.5" in log
+    assert isinstance(sim_wfg.get_phase(), float)
+    with pytest.raises(ValueError, match="Phase must be"):
+        sim_wfg.set_phase(400.0)
+
+
 def test_configure_pulse_width_and_duty_cycle_conflict(sim_wfg: Keysight33500B) -> None:
     with pytest.raises(ValueError, match="not both"):
         sim_wfg.configure_pulse(frequency=1e3, width=1e-4, duty_cycle=10.0)

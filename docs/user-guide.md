@@ -157,6 +157,7 @@ with Keysight33500B() as wfg:
     wfg.configure_sine(frequency=1e3, amplitude=1.0, offset=0.0)
     wfg.configure_square(frequency=1e3, amplitude=1.0, duty_cycle=25.0)
     wfg.configure_ramp(frequency=100.0, amplitude=2.0, symmetry=50.0)  # triangle
+    wfg.set_phase(90.0)            # phase offset in degrees (-360 ... +360)
     wfg.configure_dc(offset=1.5)
 
     wfg.set_output_load(50)        # 50 Ohm terminated load (default)
