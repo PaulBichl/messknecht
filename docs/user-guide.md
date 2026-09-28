@@ -23,6 +23,17 @@ You also need a VISA backend, one of:
 - Keysight IO Libraries or NI-VISA (recommended in the lab), or
 - the pure Python backend: `pip install pyvisa-py` (then pass `visa_library=@py`, see below).
 
+With pyvisa-py, USB instruments need `pip install pyusb` and serial ones
+`pip install pyserial` (the hatch dev environment has both). On Linux, USB
+devices are root-only by default; a udev rule gives your user access (replug
+the instrument afterwards):
+
+```bash
+# /etc/udev/rules.d/99-keysight-usbtmc.rules
+SUBSYSTEM=="usb", ATTR{idVendor}=="2a8d", MODE="0660", GROUP="users"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0957", MODE="0660", GROUP="users"
+```
+
 ## Finding your instrument
 
 ```bash
@@ -31,6 +42,8 @@ python -m messknecht        # lists all VISA resources visible on this machine
 
 Typical resource strings: `USB0::0x2A8D::0x0396::MY58493xx::INSTR`,
 `TCPIP0::192.168.1.20::INSTR`, `ASRL/dev/ttyACM0::INSTR` (serial).
+pyvisa-py lists USB IDs in decimal (`USB0::10893::45848::MY58020105::0::INSTR`);
+the hex form `USB0::0x2A8D::0xB318::MY58020105::INSTR` opens the same instrument.
 
 ## Connecting: `initialize()`
 

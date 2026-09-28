@@ -58,6 +58,9 @@ dependencies = [
     "matplotlib",
     "ipykernel",
     "pyvisa",
+    "pyvisa-py",  # pure Python VISA backend (no NI/Keysight VISA on the dev machines)
+    "pyusb",      # USB instruments with pyvisa-py (e.g. the 34450A)
+    "pyserial",   # serial instruments with pyvisa-py (e.g. the PL303QMD over USB)
 ]
 
 # https://hatch.pypa.io/latest/config/environment/overview/#scripts
