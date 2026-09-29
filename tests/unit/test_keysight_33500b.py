@@ -58,6 +58,36 @@ def test_set_phase(sim_wfg: Keysight33500B) -> None:
         sim_wfg.set_phase(400.0)
 
 
+def test_configure_sweep(sim_wfg: Keysight33500B) -> None:
+    sim_wfg.configure_sweep(start=1e3, stop=10e3, time=1.0, spacing="log")
+    sim_wfg.disable_sweep()
+    log = _log(sim_wfg)
+    assert "SOURce1:FREQuency:STARt 1000" in log
+    assert "SOURce1:FREQuency:STOP 10000" in log
+    assert "SOURce1:SWEep:TIME 1" in log
+    assert "SOURce1:SWEep:SPACing LOGarithmic" in log
+    assert "TRIGger1:SOURce IMMediate" in log
+    assert log.index("SOURce1:SWEep:STATe 1") < log.index("SOURce1:SWEep:STATe 0")
+
+
+def test_configure_burst_and_bus_trigger(sim_wfg: Keysight33500B) -> None:
+    sim_wfg.configure_burst(cycles=5, period=10e-3)
+    sim_wfg.configure_burst(cycles="infinity", trigger_source="bus", channel=2)
+    sim_wfg.trigger(channel=2)
+    log = _log(sim_wfg)
+    assert "SOURce1:BURSt:MODE TRIGgered" in log
+    assert "SOURce1:BURSt:NCYCles 5" in log
+    assert "SOURce1:BURSt:INTernal:PERiod 0.01" in log
+    assert "SOURce1:BURSt:STATe 1" in log
+    assert "SOURce2:BURSt:NCYCles INFinity" in log
+    assert "TRIGger2:SOURce BUS" in log
+    assert "TRIGger2" in log
+    with pytest.raises(ValueError, match="Burst cycles"):
+        sim_wfg.configure_burst(cycles=0)
+    with pytest.raises(ValueError, match="Invalid trigger source"):
+        sim_wfg.configure_burst(cycles=1, trigger_source="manual")
+
+
 def test_configure_pulse_width_and_duty_cycle_conflict(sim_wfg: Keysight33500B) -> None:
     with pytest.raises(ValueError, match="not both"):
         sim_wfg.configure_pulse(frequency=1e3, width=1e-4, duty_cycle=10.0)

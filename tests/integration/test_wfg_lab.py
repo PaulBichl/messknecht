@@ -76,5 +76,28 @@ def test_phase(wfg: Keysight33500B) -> None:
     assert wfg.get_phase() == pytest.approx(0.0)
 
 
+def test_sweep(wfg: Keysight33500B) -> None:
+    wfg.configure_sine(amplitude=1.0)
+    wfg.configure_sweep(start=1e3, stop=10e3, time=1.0)
+    wfg.output(True)
+    print("\n1 kHz -> 10 kHz linear sweep (1 s) on CH1 - confirm on the scope")
+    assert wfg.lowlevel.query_bool("SOURce1:SWEep:STATe?") is True
+    wfg.disable_sweep()
+    assert wfg.lowlevel.query_bool("SOURce1:SWEep:STATe?") is False
+
+
+def test_burst(wfg: Keysight33500B) -> None:
+    wfg.configure_sine(frequency=1e3, amplitude=1.0)
+    wfg.configure_burst(cycles=5, period=10e-3)
+    wfg.output(True)
+    print("\nBursts of 5 x 1 kHz sine every 10 ms on CH1 - confirm on the scope")
+    assert wfg.lowlevel.query_bool("SOURce1:BURSt:STATe?") is True
+    wfg.configure_burst(cycles=3, trigger_source="bus")
+    wfg.trigger()
+    wfg.check_errors()
+    wfg.disable_burst()
+    assert wfg.lowlevel.query_bool("SOURce1:BURSt:STATe?") is False
+
+
 def test_no_pending_instrument_errors(wfg: Keysight33500B) -> None:
     wfg.check_errors()

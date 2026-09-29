@@ -1,7 +1,7 @@
 """Driver for the Keysight 33500B series waveform generators.
 
-Covers standard waveform configuration (sine, square, ramp, pulse, noise, DC)
-and downloading arbitrary waveforms, e.g. from a CSV file. Two channel models
+Covers standard waveform configuration (sine, square, ramp, pulse, noise, DC),
+frequency sweep, burst and downloading arbitrary waveforms, e.g. from a CSV file. Two channel models
 (33510B/33522B, ...) are supported via the ``channel`` argument; single
 channel models simply use channel 1.
 
@@ -49,7 +49,19 @@ _LOAD_INFINITE_THRESHOLD = 9.0e37
 #: Spellings for "high impedance" accepted by the application layer.
 _HIGH_Z_KEYWORDS = {"HIGHZ", "HIGH_Z", "HI-Z", "HIZ", "INF", "INFINITY"}
 
-_ARB_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,11}")
+_SWEEP_SPACINGS = {"LIN": "LINear", "LINEAR": "LINear", "LOG": "LOGarithmic", "LOGARITHMIC": "LOGarithmic"}
+_BURST_MODES = {"TRIG": "TRIGgered", "TRIGGERED": "TRIGgered", "GAT": "GATed", "GATED": "GATed"}
+_TRIGGER_SOURCES = {
+    "IMM": "IMMediate",
+    "IMMEDIATE": "IMMediate",
+    "EXT": "EXTernal",
+    "EXTERNAL": "EXTernal",
+    "TIM": "TIMer",
+    "TIMER": "TIMer",
+    "BUS": "BUS",
+}
+
+_ARB_NAME_RE =re.compile(r"[A-Za-z][A-Za-z0-9_]{0,11}")
 _STANDARD_FUNCTIONS = ("SINusoid", "SQUare", "RAMP", "PULSe", "NOISe", "DC", "PRBS", "ARB")
 #: Accepted spellings: full mnemonic and SCPI short form (upper case part).
 _FUNCTION_KEYWORDS = {name.upper() for name in _STANDARD_FUNCTIONS} | {
@@ -146,6 +158,71 @@ class Keysight33500BLowLevel(VisaInstrument):
     def set_pulse_edge_time(self, channel: int, seconds: float) -> None:
         """``[SOURce<n>:]FUNCtion:PULSe:TRANsition[:BOTH] <seconds>``."""
         self.write(f"{self._source(channel)}:FUNCtion:PULSe:TRANsition:BOTH {scpi_number(seconds)}")
+
+    # -- sweep -----------------------------------------------------------------
+
+    def set_sweep_state(self, channel: int, on: bool) -> None:
+        """``[SOURce<n>:]SWEep:STATe {ON|OFF}``."""
+        self.write(f"{self._source(channel)}:SWEep:STATe {scpi_bool(on)}")
+
+    def set_start_frequency(self, channel: int, hertz: float) -> None:
+        """``[SOURce<n>:]FREQuency:STARt <frequency>``."""
+        self.write(f"{self._source(channel)}:FREQuency:STARt {scpi_number(hertz)}")
+
+    def set_stop_frequency(self, channel: int, hertz: float) -> None:
+        """``[SOURce<n>:]FREQuency:STOP <frequency>``."""
+        self.write(f"{self._source(channel)}:FREQuency:STOP {scpi_number(hertz)}")
+
+    def set_sweep_time(self, channel: int, seconds: float) -> None:
+        """``[SOURce<n>:]SWEep:TIME <seconds>``."""
+        self.write(f"{self._source(channel)}:SWEep:TIME {scpi_number(seconds)}")
+
+    def set_sweep_spacing(self, channel: int, spacing: str) -> None:
+        """``[SOURce<n>:]SWEep:SPACing {LINear|LOGarithmic}``."""
+        keyword = _keyword(spacing, _SWEEP_SPACINGS, "sweep spacing")
+        self.write(f"{self._source(channel)}:SWEep:SPACing {keyword}")
+
+    # -- burst -----------------------------------------------------------------
+
+    def set_burst_state(self, channel: int, on: bool) -> None:
+        """``[SOURce<n>:]BURSt:STATe {ON|OFF}``."""
+        self.write(f"{self._source(channel)}:BURSt:STATe {scpi_bool(on)}")
+
+    def set_burst_mode(self, channel: int, mode: str) -> None:
+        """``[SOURce<n>:]BURSt:MODE {TRIGgered|GATed}``."""
+        keyword = _keyword(mode, _BURST_MODES, "burst mode")
+        self.write(f"{self._source(channel)}:BURSt:MODE {keyword}")
+
+    def set_burst_cycles(self, channel: int, cycles: int | str) -> None:
+        """``[SOURce<n>:]BURSt:NCYCles {<cycles>|INFinity}``."""
+        if isinstance(cycles, str):
+            if cycles.strip().upper() not in {"INF", "INFINITY"}:
+                msg = f"Invalid burst cycles {cycles!r}; use a count >= 1 or 'infinity'"
+                raise ValueError(msg)
+            value = "INFinity"
+        else:
+            if cycles < 1:
+                msg = f"Burst cycles must be >= 1, got {cycles}"
+                raise ValueError(msg)
+            value = str(int(cycles))
+        self.write(f"{self._source(channel)}:BURSt:NCYCles {value}")
+
+    def set_burst_period(self, channel: int, seconds: float) -> None:
+        """``[SOURce<n>:]BURSt:INTernal:PERiod <seconds>`` - used with an immediate trigger."""
+        self.write(f"{self._source(channel)}:BURSt:INTernal:PERiod {scpi_number(seconds)}")
+
+    # -- trigger (sweep/burst) -------------------------------------------------
+
+    def set_trigger_source(self, channel: int, source: str) -> None:
+        """``TRIGger<n>:SOURce {IMMediate|EXTernal|TIMer|BUS}``."""
+        self._source(channel)
+        keyword = _keyword(source, _TRIGGER_SOURCES, "trigger source")
+        self.write(f"TRIGger{channel}:SOURce {keyword}")
+
+    def trigger(self, channel: int) -> None:
+        """``TRIGger<n>`` - trigger a sweep or burst now (any trigger source)."""
+        self._source(channel)
+        self.write(f"TRIGger{channel}")
 
     # -- arbitrary waveforms ---------------------------------------------------
 
@@ -329,6 +406,77 @@ class Keysight33500B(InstrumentApplication[Keysight33500BLowLevel]):
         self._lowlevel.write("UNIT:ANGLe DEGree")
         return self._lowlevel.get_phase(channel)
 
+    # -- sweep and burst -----------------------------------------------------------
+    # The instrument allows only one of sweep, burst and modulation at a time;
+    # enabling one switches the others off.
+
+    def configure_sweep(
+        self,
+        start: float,
+        stop: float,
+        time: float,
+        spacing: str = "linear",
+        trigger_source: str = "immediate",
+        channel: int = 1,
+    ) -> None:
+        """Sweep the frequency of the current waveform and enable the sweep.
+
+        Args:
+            start: Start frequency in Hz (``stop < start`` sweeps downwards).
+            stop: Stop frequency in Hz.
+            time: Sweep time in seconds.
+            spacing: ``"linear"`` or ``"log"``.
+            trigger_source: ``"immediate"`` (sweep repeats continuously),
+                ``"external"``, ``"timer"`` or ``"bus"`` (see :meth:`trigger`).
+            channel: Output channel (1 or 2).
+        """
+        lowlevel = self._lowlevel
+        lowlevel.set_start_frequency(channel, start)
+        lowlevel.set_stop_frequency(channel, stop)
+        lowlevel.set_sweep_time(channel, time)
+        lowlevel.set_sweep_spacing(channel, spacing)
+        lowlevel.set_trigger_source(channel, trigger_source)
+        lowlevel.set_sweep_state(channel, True)
+        self.check_errors()
+
+    def disable_sweep(self, channel: int = 1) -> None:
+        """Switch the sweep off (the channel outputs the plain waveform again)."""
+        self._lowlevel.set_sweep_state(channel, False)
+
+    def configure_burst(
+        self,
+        cycles: int | str,
+        period: float | None = None,
+        trigger_source: str = "immediate",
+        channel: int = 1,
+    ) -> None:
+        """Output bursts of ``cycles`` periods of the current waveform (triggered mode).
+
+        Args:
+            cycles: Periods per burst (>= 1), or ``"infinity"`` (runs until triggered).
+            period: Burst repetition period in seconds; only used with
+                ``trigger_source="immediate"``. ``None`` keeps the instrument setting.
+            trigger_source: ``"immediate"`` (bursts repeat every ``period``),
+                ``"external"``, ``"timer"`` or ``"bus"`` (see :meth:`trigger`).
+            channel: Output channel (1 or 2).
+        """
+        lowlevel = self._lowlevel
+        lowlevel.set_burst_mode(channel, "triggered")
+        lowlevel.set_burst_cycles(channel, cycles)
+        if period is not None:
+            lowlevel.set_burst_period(channel, period)
+        lowlevel.set_trigger_source(channel, trigger_source)
+        lowlevel.set_burst_state(channel, True)
+        self.check_errors()
+
+    def disable_burst(self, channel: int = 1) -> None:
+        """Switch burst mode off (the channel outputs the plain waveform again)."""
+        self._lowlevel.set_burst_state(channel, False)
+
+    def trigger(self, channel: int = 1) -> None:
+        """Start one sweep or burst now, e.g. with ``trigger_source="bus"``."""
+        self._lowlevel.trigger(channel)
+
     # -- arbitrary waveforms -------------------------------------------------------
 
     def load_arbitrary(
@@ -466,6 +614,16 @@ class Keysight33500B(InstrumentApplication[Keysight33500BLowLevel]):
         """Return the expected output termination in Ohm (``math.inf`` for high Z)."""
         ohms = self._lowlevel.get_output_load(channel)
         return math.inf if ohms >= _LOAD_INFINITE_THRESHOLD else ohms
+
+
+def _keyword(value: str, keywords: dict[str, str], what: str) -> str:
+    """Map a user spelling (case insensitive) to its SCPI keyword."""
+    keyword = keywords.get(value.strip().upper())
+    if keyword is None:
+        allowed = ", ".join(sorted({name.lower() for name in keywords.values()}))
+        msg = f"Invalid {what} {value!r}; allowed: {allowed}"
+        raise ValueError(msg)
+    return keyword
 
 
 def _read_waveform_file(path: Path) -> list[float]:

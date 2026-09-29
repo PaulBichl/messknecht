@@ -183,6 +183,24 @@ with Keysight33500B() as wfg:
     wfg.load_arbitrary_csv("my_arb.csv", sample_rate=100e3, amplitude=1.0)
 ```
 
+Sweep and burst modulate the waveform configured before (sine, square, ...):
+
+```python
+wfg.configure_sine(amplitude=1.0)
+wfg.configure_sweep(start=1e3, stop=10e3, time=1.0)          # repeats continuously
+wfg.configure_sweep(start=10.0, stop=100e3, time=2.0, spacing="log")
+wfg.disable_sweep()
+
+wfg.configure_sine(frequency=1e3, amplitude=1.0)
+wfg.configure_burst(cycles=5, period=10e-3)                  # 5 cycles every 10 ms
+wfg.configure_burst(cycles=5, trigger_source="bus")          # 5 cycles per trigger() ...
+wfg.trigger()                                                # ... software trigger
+wfg.disable_burst()
+```
+
+Only one of sweep, burst and modulation can be active at a time: enabling one
+switches the others off (instrument behaviour).
+
 Output load: the generator always has a 50 Ω source impedance. The load
 setting only tells it what is connected, so the programmed amplitude and
 offset appear at the load. If the setting is wrong, you get twice
