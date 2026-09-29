@@ -6,8 +6,9 @@ Guide for Claude, Copilot, and other AI assistants on code style and project pat
 
 **messknecht** is an instrument driver library (lab automation) on top of pyvisa.
 Read `docs/developer-guide.md` before touching driver code — it explains the
-architecture and the design decisions. Instrument programming manuals are in
-`manuals/`; the SCPI command in a low level method's docstring must match the manual.
+architecture and the design decisions. The instrument programming manuals are
+listed in its "Programming manuals" section (not in the repo); the SCPI command
+in a low level method's docstring must match the manual.
 
 ## Project Setup
 
@@ -148,7 +149,7 @@ declaring work done.
 
 ### ✅ Do
 
-- Verify SCPI syntax against the manual in `manuals/` before adding a command
+- Verify SCPI syntax against the instrument's programming manual before adding a command
 - Keep the application layer small; expose the rest via `instrument.lowlevel`
 - Add unit tests (simulation) for every new driver method
 - Use the typed query helpers so simulation keeps working

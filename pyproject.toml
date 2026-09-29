@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "messknecht"
-version = "0.1.0"
+dynamic = ["version"]  # single source: __version__ in src/messknecht/__init__.py
 description = "Lab Automation Framework"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -39,6 +39,9 @@ dev = [
 # Hatch is a modern, extensible Python project manager
 # Read more at https://hatch.pypa.io
 # Why Hatch? -> Why not? -> https://hatch.pypa.io/latest/why/
+
+[tool.hatch.version]
+path = "src/messknecht/__init__.py"
 
 [tool.hatch.envs.hatch-uv]
 dependencies = [

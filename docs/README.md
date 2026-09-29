@@ -9,4 +9,5 @@
 - **[AGENT.md](../AGENT.md)** — conventions for AI assistants working on this
   repository.
 
-Instrument programming manuals are in [`manuals/`](../manuals).
+Instrument programming manuals used:
+[developer guide → Programming manuals](developer-guide.md#programming-manuals).

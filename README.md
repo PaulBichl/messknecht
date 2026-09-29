@@ -80,8 +80,9 @@ hatch run test tests/integration --psu "ASRL/dev/ttyACM0::INSTR" -s
 ## Documentation
 
 See the [`docs/`](./docs) directory: [user guide](./docs/user-guide.md),
-[developer guide](./docs/developer-guide.md). Instrument programming manuals
-are in [`manuals/`](./manuals).
+[developer guide](./docs/developer-guide.md). The instrument
+programming manuals used are listed in the developer guide
+([Programming manuals](./docs/developer-guide.md#programming-manuals)).
 
 ## Contributing
 

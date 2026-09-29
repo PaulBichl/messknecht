@@ -157,8 +157,8 @@ their operations sequence several commands or move data.
 
 ## Adding a new driver — checklist
 
-1. **Read the programming manual.** Extract the exact command syntax; put the
-   manual into `manuals/`.
+1. **Read the programming manual.** Extract the exact command syntax; add the
+   manual to the [table below](#programming-manuals).
 2. Create `src/messknecht/instruments/<vendor>_<model>.py` with, in this order:
    a `_<Model>Simulation(SimulationBackend)` (usually just an `IDN` override),
    `<Model>LowLevel(VisaInstrument)` and `<Model>(InstrumentApplication[...])`.
@@ -176,6 +176,19 @@ their operations sequence several commands or move data.
    printouts for the human in the lab, safe teardown (outputs off).
 7. An example script in `examples/` and a section in `docs/user-guide.md`.
 
+## Programming manuals
+
+The manuals are not part of the repository (size, copyright) — get them from
+the manufacturer's website. The SCPI command in a low level method's docstring must
+match the manual.
+
+| Instrument | Manual |
+|---|---|
+| TTi PL303QMD | New PL & PL-P Series Instruction Manual (section "Remote Commands") |
+| Keysight DSO-X 3014T | InfiniiVision 3000T X-Series Programmer's Guide |
+| Keysight 33500B | Trueform Series Operating and Service Guide |
+| Keysight 34450A | 34450A Programmer's Reference |
+
 ## Testing
 
 - **Integration >> unit** (see `instruction.md`): the integration tests are
@@ -187,7 +200,7 @@ their operations sequence several commands or move data.
   ```
 
 - Unit tests cover parsing, command formatting and driver logic against the
-  simulation — fast, no hardware, run in CI: `hatch run test`.
+  simulation — fast, no hardware: `hatch run test`.
 
 - **The split:** anything checkable without an instrument belongs in a unit
   test; a lab test answers "does this work as intended?" on real hardware.
@@ -195,7 +208,7 @@ their operations sequence several commands or move data.
   test — it makes the test pass while asserting nothing. If an assertion needs
   hardware, let it need hardware.
 
-- Because lab tests and examples never run in CI, `hatch run type` includes
+- Because lab tests and examples cannot run without hardware, `hatch run type` includes
   `tests/` and `examples/`: mypy is what catches a misspelled driver method or
   keyword argument in them before you are standing at the bench.
 
