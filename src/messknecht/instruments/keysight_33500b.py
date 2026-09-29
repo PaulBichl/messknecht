@@ -61,7 +61,7 @@ _TRIGGER_SOURCES = {
     "BUS": "BUS",
 }
 
-_ARB_NAME_RE =re.compile(r"[A-Za-z][A-Za-z0-9_]{0,11}")
+_ARB_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,11}")
 _STANDARD_FUNCTIONS = ("SINusoid", "SQUare", "RAMP", "PULSe", "NOISe", "DC", "PRBS", "ARB")
 #: Accepted spellings: full mnemonic and SCPI short form (upper case part).
 _FUNCTION_KEYWORDS = {name.upper() for name in _STANDARD_FUNCTIONS} | {
