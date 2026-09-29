@@ -7,6 +7,7 @@ import pyvisa
 
 from messknecht.core.exceptions import (
     InstrumentCommandError,
+    InstrumentConnectionError,
     InstrumentDataError,
     InstrumentIOError,
     InstrumentTimeoutError,
@@ -156,6 +157,23 @@ def test_other_visa_errors_become_io_errors(sim_instrument: VisaInstrument) -> N
         sim_instrument._translate_visa_errors("writing"),
     ):
         raise failure
+
+
+class _OtherModel(VisaInstrument):
+    ID_PATTERN = "NOPE"
+
+
+def test_id_query_rejects_wrong_instrument() -> None:
+    instrument = _OtherModel()
+    with pytest.raises(InstrumentConnectionError, match="id_query=false"):
+        instrument.initialize("SIM::generic", True, "simulate=true")
+    assert not instrument.is_initialized
+
+
+def test_id_query_can_be_disabled() -> None:
+    instrument = _OtherModel()
+    instrument.initialize("SIM::generic", True, "simulate=true, id_query=false")
+    assert instrument.is_initialized
 
 
 def test_binary_query_unsupported_in_simulation(sim_instrument: VisaInstrument) -> None:

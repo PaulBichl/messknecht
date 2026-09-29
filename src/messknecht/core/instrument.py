@@ -14,6 +14,7 @@ Architecture (see ``docs/developer-guide.md``):
 from __future__ import annotations
 
 import contextlib
+import re
 import threading
 from typing import TYPE_CHECKING, ClassVar, Self, cast
 
@@ -74,6 +75,9 @@ class VisaInstrument:
     DEFAULT_TIMEOUT_MS: ClassVar[float] = 5000.0
     #: Simulation backend class used when ``simulate=true``.
     SIMULATION_BACKEND: ClassVar[type[SimulationBackend]] = SimulationBackend
+    #: Regex searched in the ``*IDN?`` response by ``initialize()`` (option
+    #: ``id_query``); ``None`` accepts any instrument.
+    ID_PATTERN: ClassVar[str | None] = None
 
     def __init__(self) -> None:
         self._resource: MessageBasedResource | None = None
@@ -97,7 +101,9 @@ class VisaInstrument:
 
         Raises:
             OptionStringError: If the option string is malformed.
-            InstrumentConnectionError: If the VISA session cannot be opened.
+            InstrumentConnectionError: If the VISA session cannot be opened, or
+                the instrument does not identify as the expected model (option
+                ``id_query``, checked before the reset).
         """
         if self.is_initialized:
             self.close()
@@ -112,6 +118,8 @@ class VisaInstrument:
         else:
             self._resource = self._open_resource(res, timeout_ms)
 
+        if option_as_bool(self._options, "id_query", default=True):
+            self._check_identity()
         if reset:
             self.reset()
         self._configure_defaults()
@@ -134,6 +142,19 @@ class VisaInstrument:
         if self.READ_TERMINATION is not None:
             resource.read_termination = self.READ_TERMINATION
         return resource
+
+    def _check_identity(self) -> None:
+        """Close and raise if ``*IDN?`` does not match :attr:`ID_PATTERN`."""
+        if self.ID_PATTERN is None:
+            return
+        idn = self.idn
+        if re.search(self.ID_PATTERN, idn) is None:
+            self.close()
+            msg = (
+                f"Resource {self._resource_name!r} identifies as {idn!r}, expected an instrument "
+                f"matching {self.ID_PATTERN!r} (pass 'id_query=false' to skip this check)"
+            )
+            raise InstrumentConnectionError(msg)
 
     def _configure_defaults(self) -> None:
         """Hook for subclasses: called at the end of ``initialize()``."""

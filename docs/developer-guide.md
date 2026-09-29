@@ -163,8 +163,9 @@ their operations sequence several commands or move data.
    a `_<Model>Simulation(SimulationBackend)` (usually just an `IDN` override),
    `<Model>LowLevel(VisaInstrument)` and `<Model>(InstrumentApplication[...])`.
 3. Set class attributes on the low level driver if needed:
-   `SIMULATION_BACKEND`, `READ_TERMINATION`/`WRITE_TERMINATION`,
-   `DEFAULT_TIMEOUT_MS`; override `check_errors()` for non-SCPI instruments.
+   `SIMULATION_BACKEND`, `ID_PATTERN` (regex for the `*IDN?` model check in
+   `initialize()`; the simulation `IDN` must match it),
+   `READ_TERMINATION`/`WRITE_TERMINATION`, `DEFAULT_TIMEOUT_MS`; override `check_errors()` for non-SCPI instruments.
 4. Export the classes in `instruments/__init__.py` and `messknecht/__init__.py`
    (`__all__` is sorted — ruff enforces it).
 5. Unit tests (`tests/unit/`) asserting on

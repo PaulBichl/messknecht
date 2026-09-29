@@ -74,6 +74,7 @@ with Keysight34450A() as dmm:
 |---|---|---|
 | `simulate` | `simulate=true` | run against the built-in simulation (no hardware) |
 | `timeout` | `timeout=10000` | VISA I/O timeout in ms (default 5000) |
+| `id_query` | `id_query=false` | check `*IDN?` against the driver's model before the reset (default `true`) |
 | `error_check` | `error_check=true` | query the error queue after **every** write (slow, great for debugging) |
 | `visa_library` | `visa_library=@py` | select the pyvisa backend (e.g. pyvisa-py) |
 
@@ -247,7 +248,9 @@ print(scope.lowlevel.query(":ACQuire:TYPE?"))
 ## Troubleshooting
 
 - **`InstrumentConnectionError`** — wrong resource string or no VISA backend.
-  Run `python -m messknecht` to list resources.
+  Run `python -m messknecht` to list resources. "identifies as ..." means the
+  address belongs to a different instrument; `id_query=false` skips the check
+  (e.g. for a compatible model with a different name).
 - **`InstrumentTimeoutError`** — the instrument needs longer than the VISA
   timeout (big transfers, slow measurements): pass `timeout=...` in the option
   string, or check that the instrument isn't waiting for a trigger.

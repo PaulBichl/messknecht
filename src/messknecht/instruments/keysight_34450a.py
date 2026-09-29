@@ -63,6 +63,7 @@ class Keysight34450ALowLevel(VisaInstrument):
     """Low level SCPI wrapper for the Keysight 34450A."""
 
     SIMULATION_BACKEND = _Keysight34450ASimulation
+    ID_PATTERN = r"34450A"
 
     # -- CONFigure subsystem -------------------------------------------------
 

@@ -72,6 +72,7 @@ class Keysight33500BLowLevel(VisaInstrument):
     """Low level SCPI wrapper for the Keysight 33500B series."""
 
     SIMULATION_BACKEND = _Keysight33500BSimulation
+    ID_PATTERN = r"335\d\dB"
 
     @staticmethod
     def _source(channel: int) -> str:

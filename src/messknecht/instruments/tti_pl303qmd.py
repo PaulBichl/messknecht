@@ -56,6 +56,7 @@ class TTiPL303QMDLowLevel(VisaInstrument):
     """Low level wrapper around the PL303QMD remote command set."""
 
     SIMULATION_BACKEND = _TTiPL303QMDSimulation
+    ID_PATTERN = r"PL303QMD"
     #: Responses are terminated with CR LF; commands with LF.
     READ_TERMINATION = "\n"
     WRITE_TERMINATION = "\n"

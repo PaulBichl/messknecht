@@ -158,6 +158,7 @@ class KeysightDSOX3000TLowLevel(VisaInstrument):
     """Low level SCPI wrapper for the InfiniiVision 3000T X-series."""
 
     SIMULATION_BACKEND = _KeysightDSOX3000TSimulation
+    ID_PATTERN = r"DSO-X 3\d{3}T"
 
     @staticmethod
     def _channel(channel: int) -> str:

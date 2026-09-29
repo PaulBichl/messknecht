@@ -12,6 +12,9 @@ Well-known keys understood by :class:`~messknecht.core.instrument.VisaInstrument
 ``simulate``              ``true``/``false`` - run against the simulation
                           backend instead of real hardware (default ``false``).
 ``timeout``               VISA I/O timeout in milliseconds.
+``id_query``              ``true``/``false`` - check the ``*IDN?`` response
+                          against the driver's model before the reset and
+                          raise on a mismatch (default ``true``).
 ``error_check``           ``true``/``false`` - query the instrument error queue
                           after every write and raise on errors (slow, useful
                           for debugging; default ``false``).
