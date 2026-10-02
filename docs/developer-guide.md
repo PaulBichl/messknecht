@@ -47,7 +47,7 @@ user ──> Application layer (TTiPL303QMD)          "composed, user friendly"
   SCPI command as documented in the manual — this is the contract.
 - Methods only format/parse; no policy, no sequencing, no state. All I/O goes
   through the typed base helpers (`write`, `query`, `query_float`,
-  `query_bool`, `query_binary_block`), never through the pyvisa resource
+  `query_float_list`, `query_bool`, `query_binary_block`), never through the pyvisa resource
   directly — that is what makes simulation and error translation work.
 - Validate arguments that would produce *silently wrong* SCPI (bad keyword,
   bad channel number) with `ValueError`. Leave range checking of numeric
@@ -124,7 +124,8 @@ the DMM, one canned `CONFigure?` string). Writes are logged and ignored;
 numeric reads return defaults; string readbacks (`FUNCtion?`) and setpoint
 round-trips are *not* simulated. The
 exception is the **scope**, whose `SimulationBackend` returns synthetic
-*binary* data (a fixed ±3 V sine and a placeholder screenshot), because binary
+*binary* data (a fixed ±3 V sine and a placeholder screenshot, plus a canned
+`*OPT?`), because binary
 transfers cannot fall back to a numeric default and are the most bug-prone code
 worth exercising offline. `SimulatedSession.log` records all traffic — unit
 tests assert on it (they verify the *commands emitted*, which is what matters),

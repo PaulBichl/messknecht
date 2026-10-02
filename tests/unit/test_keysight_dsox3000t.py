@@ -148,3 +148,66 @@ def test_measurements_return_floats(sim_scope: KeysightDSOX3000T) -> None:
 def test_waveform_time_axis_is_monotonic(sim_scope: KeysightDSOX3000T) -> None:
     waveform = sim_scope.get_waveform(1, points=100)
     assert np.all(np.diff(waveform.time) > 0)
+
+
+def test_setup_channel_label(sim_scope: KeysightDSOX3000T) -> None:
+    sim_scope.setup_channel(2, label="VOUT")
+    log = _log(sim_scope)
+    assert ':CHANnel2:LABel "VOUT"' in log
+    assert ":DISPlay:LABel 1" in log
+
+
+def test_channel_label_with_quotes_raises(sim_scope: KeysightDSOX3000T) -> None:
+    with pytest.raises(ValueError, match="double quotes"):
+        sim_scope.setup_channel(1, label='say "hi"')
+
+
+def test_installed_options_drops_empty_slots(sim_scope: KeysightDSOX3000T) -> None:
+    options = sim_scope.installed_options
+    assert "*OPT?" in _log(sim_scope)
+    assert "0" not in options
+    assert "WAVEGEN" in options
+
+
+def test_additional_measurement_commands(sim_scope: KeysightDSOX3000T) -> None:
+    sim_scope.measure_vrms(1)
+    sim_scope.measure_vrms(2, ac=True)
+    sim_scope.measure_vmax(1)
+    sim_scope.measure_vmin(1)
+    sim_scope.measure_period(1)
+    sim_scope.measure_rise_time(1)
+    sim_scope.measure_fall_time(1)
+    sim_scope.measure_duty_cycle(1)
+    sim_scope.measure_phase(1, 2)
+    sim_scope.measure_delay(3, 4)
+    log = _log(sim_scope)
+    assert ":MEASure:VRMS? DISPlay,DC,CHANnel1" in log
+    assert ":MEASure:VRMS? DISPlay,AC,CHANnel2" in log
+    assert ":MEASure:VMAX? CHANnel1" in log
+    assert ":MEASure:VMIN? CHANnel1" in log
+    assert ":MEASure:PERiod? CHANnel1" in log
+    assert ":MEASure:RISetime? CHANnel1" in log
+    assert ":MEASure:FALLtime? CHANnel1" in log
+    assert ":MEASure:DUTYcycle? CHANnel1" in log
+    assert ":MEASure:PHASe? CHANnel1,CHANnel2" in log
+    assert ":MEASure:DELay:DEFine RISing,0,MIDDle,RISing,0,MIDDle" in log
+    assert ":MEASure:DELay? AUTO,CHANnel3,CHANnel4" in log
+
+
+def test_measure_delay_manual_edges(sim_scope: KeysightDSOX3000T) -> None:
+    sim_scope.measure_delay(1, 2, edge1=2, edge2=3, slope2="falling", threshold1="upper")
+    log = _log(sim_scope)
+    assert log.index(":MEASure:DELay:DEFine RISing,2,UPPer,FALLing,3,MIDDle") < log.index(
+        ":MEASure:DELay? MANual,CHANnel1,CHANnel2"
+    )
+
+
+def test_measure_delay_invalid_definition(sim_scope: KeysightDSOX3000T) -> None:
+    with pytest.raises(ValueError, match="both be 0"):
+        sim_scope.measure_delay(1, 2, edge1=0, edge2=1)
+    with pytest.raises(ValueError, match="edge number"):
+        sim_scope.measure_delay(1, 2, edge1=1001, edge2=1)
+    with pytest.raises(ValueError, match="slope"):
+        sim_scope.measure_delay(1, 2, slope1="up")
+    with pytest.raises(ValueError, match="threshold"):
+        sim_scope.measure_delay(1, 2, threshold2="50%")

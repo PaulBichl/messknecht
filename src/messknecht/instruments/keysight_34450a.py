@@ -22,13 +22,19 @@ Usage::
         dmm.initialize("USB0::0x2A8D::...::INSTR", reset=True)
         dmm.configure.voltage_dc(range=10, resolution=1.5e-6)
         print(dmm.read())
+
+For several samples per trigger (e.g. noise statistics) use
+:meth:`Keysight34450A.read_samples`.
 """
 
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 
-from messknecht.core.exceptions import OverloadError
+import numpy as np
+
+from messknecht.core.exceptions import InstrumentDataError, OverloadError
 from messknecht.core.instrument import InstrumentApplication, VisaInstrument
 from messknecht.core.scpi import scpi_value
 from messknecht.core.simulation import SimulationBackend
@@ -39,6 +45,35 @@ OVERLOAD_THRESHOLD = 9.0e37
 _RANGE_KEYWORDS = ("AUTO", "MIN", "MAX", "DEF")
 _RESOLUTION_KEYWORDS = ("MIN", "MAX", "DEF")
 _TRIGGER_SOURCES = ("IMMEDIATE", "BUS", "EXTERNAL", "IMM", "EXT")
+
+
+@dataclasses.dataclass(frozen=True)
+class DmmSamples:
+    """Readings of one :meth:`Keysight34450A.read_samples` call plus simple statistics."""
+
+    values: np.ndarray
+
+    @property
+    def mean(self) -> float:
+        """Arithmetic mean."""
+        return float(np.mean(self.values))
+
+    @property
+    def std(self) -> float:
+        """Sample standard deviation (``ddof=1``); ``nan`` for a single reading."""
+        if self.values.size < 2:
+            return float("nan")
+        return float(np.std(self.values, ddof=1))
+
+    @property
+    def min(self) -> float:
+        """Smallest reading."""
+        return float(np.min(self.values))
+
+    @property
+    def max(self) -> float:
+        """Largest reading."""
+        return float(np.max(self.values))
 
 
 class _Keysight34450ASimulation(SimulationBackend):
@@ -160,6 +195,10 @@ class Keysight34450ALowLevel(VisaInstrument):
         """``*TRG`` - software trigger (instrument must be in wait-for-trigger)."""
         self.write("*TRG")
 
+    def set_sample_count(self, count: int) -> None:
+        """``SAMPle:COUNt <count>`` - readings taken per trigger (``CONFigure`` resets it to 1)."""
+        self.write(f"SAMPle:COUNt {int(count)}")
+
     # -- measurement flow --------------------------------------------------------
 
     def initiate(self) -> None:
@@ -177,6 +216,21 @@ class Keysight34450ALowLevel(VisaInstrument):
     def fetch(self) -> float:
         """``FETCh?`` - transfer the reading from memory to the output buffer."""
         return self.query_float("FETCh?")
+
+    def _readings(self, command: str, count: int) -> list[float]:
+        values = self.query_float_list(command, sim_count=count)
+        if len(values) != count:
+            msg = f"{command} returned {len(values)} readings, expected {count} (check SAMPle:COUNt)"
+            raise InstrumentDataError(msg)
+        return values
+
+    def read_measurements(self, count: int) -> list[float]:
+        """``READ?`` with ``SAMPle:COUNt`` > 1 - trigger and return all ``count`` readings."""
+        return self._readings("READ?", count)
+
+    def fetch_measurements(self, count: int) -> list[float]:
+        """``FETCh?`` with ``SAMPle:COUNt`` > 1 - return all ``count`` readings from memory."""
+        return self._readings("FETCh?", count)
 
 
 class Keysight34450AConfigure:
@@ -341,6 +395,44 @@ class Keysight34450A(InstrumentApplication[Keysight34450ALowLevel]):
                 lowlevel.trigger()
                 value = lowlevel.fetch()
         return self._check_overload(value)
+
+    def read_samples(self, count: int, timeout_ms: float | None = None) -> DmmSamples:
+        """Take ``count`` readings on one trigger and return them with statistics.
+
+        Uses the trigger mode of the last ``configure.*`` call, like
+        :meth:`read`. The readings are taken back to back (no sample timer on
+        the 34450A); the sample count is set back to 1 afterwards.
+
+        Args:
+            count: Number of readings (at least 1).
+            timeout_ms: Optional VISA timeout for the whole batch - ``count``
+                readings take ``count`` times as long as one.
+
+        Returns:
+            :class:`DmmSamples` with ``values`` and ``mean``/``std``/``min``/``max``.
+
+        Raises:
+            OverloadError: If any reading exceeds the selected range.
+        """
+        if count < 1:
+            msg = f"Sample count must be at least 1, got {count}"
+            raise ValueError(msg)
+        lowlevel = self._lowlevel
+        timeout_context = lowlevel.temporary_timeout(timeout_ms) if timeout_ms is not None else contextlib.nullcontext()
+        lowlevel.set_sample_count(count)
+        try:
+            with timeout_context:
+                if self._continuous:
+                    values = lowlevel.read_measurements(count)
+                else:
+                    lowlevel.initiate()
+                    lowlevel.trigger()
+                    values = lowlevel.fetch_measurements(count)
+        finally:
+            lowlevel.set_sample_count(1)
+        for value in values:
+            self._check_overload(value)
+        return DmmSamples(values=np.asarray(values, dtype=np.float64))
 
     def fetch(self) -> float:
         """Return the last reading from memory (``FETCh?``) without triggering."""

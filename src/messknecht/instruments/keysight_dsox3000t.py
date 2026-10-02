@@ -96,7 +96,8 @@ class _KeysightDSOX3000TSimulation(SimulationBackend):
 
     Unlike the other drivers this backend returns synthetic *binary* data,
     because binary transfers (waveform download, screenshot) cannot fall back to
-    a generic default the way numeric queries can. It models nothing else: the
+    a generic default the way numeric queries can. Apart from a canned ``*OPT?``
+    response it models nothing else: the
     only state is the requested point count so that ``get_waveform(points=N)``
     returns ``N`` samples; all setup writes are logged and ignored. The frame is
     always WORD format (matching what :meth:`KeysightDSOX3000T.get_waveform`
@@ -104,6 +105,8 @@ class _KeysightDSOX3000TSimulation(SimulationBackend):
     """
 
     IDN = "KEYSIGHT TECHNOLOGIES,DSO-X 3014T,MYSIM00001,07.60.2024"
+    #: Canned ``*OPT?`` response (the licenses of the lab scope, no MSO).
+    OPTIONS = "0,0,MEMUP,SGM,EDK,WAVEGEN,ADVMATH,DVMCTR,RML"
 
     _DEFAULT_POINTS = 1000
     _TIMEBASE = 100e-6  # s/div; the screen spans 10 divisions
@@ -127,6 +130,8 @@ class _KeysightDSOX3000TSimulation(SimulationBackend):
 
     def handle_query(self, command: str) -> str | None:
         normalized = command.strip().lstrip(":").upper()
+        if normalized == "*OPT?":
+            return self.OPTIONS
         if normalized.startswith(("WAV:PRE", "WAVEFORM:PRE")):
             points = self._points()
             x_increment = 10.0 * self._TIMEBASE / points
@@ -211,6 +216,17 @@ class KeysightDSOX3000TLowLevel(VisaInstrument):
             msg = f"Coupling must be 'AC' or 'DC', got {coupling!r}"
             raise ValueError(msg)
         self.write(f":{self._channel(channel)}:COUPling {keyword}")
+
+    def set_channel_label(self, channel: int, label: str) -> None:
+        """``:CHANnel<n>:LABel <string>`` - label shown on screen (truncated to 32 characters)."""
+        if '"' in label:
+            msg = f"A channel label must not contain double quotes, got {label!r}"
+            raise ValueError(msg)
+        self.write(f':{self._channel(channel)}:LABel "{label}"')
+
+    def set_display_labels(self, on: bool) -> None:
+        """``:DISPlay:LABel {ON|OFF}`` - show the channel labels."""
+        self.write(f":DISPlay:LABel {scpi_bool(on)}")
 
     def set_channel_probe(self, channel: int, attenuation: float) -> None:
         """``:CHANnel<n>:PROBe <attenuation>`` - probe attenuation factor (e.g. 10)."""
@@ -312,6 +328,12 @@ class KeysightDSOX3000TLowLevel(VisaInstrument):
         """``:WAVeform:DATA?`` - raw binary block payload for the selected source."""
         return self.query_binary_block(":WAVeform:DATA?")
 
+    # -- system ---------------------------------------------------------------------
+
+    def get_installed_options(self) -> str:
+        """``*OPT?`` - installed licenses, ``0`` for each option slot not installed."""
+        return self.query("*OPT?")
+
     # -- display / screenshot -------------------------------------------------------
 
     def set_inksaver(self, on: bool) -> None:
@@ -335,6 +357,97 @@ class KeysightDSOX3000TLowLevel(VisaInstrument):
     def measure_vaverage(self, source: str) -> float:
         """``:MEASure:VAVerage? <source>`` - average voltage of the display."""
         return self.query_float(f":MEASure:VAVerage? {source}")
+
+    def measure_vrms(self, source: str, ac: bool = False) -> float:
+        """``:MEASure:VRMS? DISPlay,{AC|DC},<source>`` - RMS voltage over the display.
+
+        ``ac=True`` removes the DC component (AC RMS).
+        """
+        return self.query_float(f":MEASure:VRMS? DISPlay,{'AC' if ac else 'DC'},{source}")
+
+    def measure_vmax(self, source: str) -> float:
+        """``:MEASure:VMAX? <source>`` - maximum voltage."""
+        return self.query_float(f":MEASure:VMAX? {source}")
+
+    def measure_vmin(self, source: str) -> float:
+        """``:MEASure:VMIN? <source>`` - minimum voltage."""
+        return self.query_float(f":MEASure:VMIN? {source}")
+
+    def measure_period(self, source: str) -> float:
+        """``:MEASure:PERiod? <source>`` - period in seconds."""
+        return self.query_float(f":MEASure:PERiod? {source}", sim_value=1e-3)
+
+    def measure_rise_time(self, source: str) -> float:
+        """``:MEASure:RISetime? <source>`` - rise time of the edge closest to the timebase reference."""
+        return self.query_float(f":MEASure:RISetime? {source}", sim_value=1e-6)
+
+    def measure_fall_time(self, source: str) -> float:
+        """``:MEASure:FALLtime? <source>`` - fall time of the edge closest to the timebase reference."""
+        return self.query_float(f":MEASure:FALLtime? {source}", sim_value=1e-6)
+
+    def measure_duty_cycle(self, source: str) -> float:
+        """``:MEASure:DUTYcycle? <source>`` - positive duty cycle in percent."""
+        return self.query_float(f":MEASure:DUTYcycle? {source}", sim_value=50.0)
+
+    def measure_phase(self, source1: str, source2: str) -> float:
+        """``:MEASure:PHASe? <source1>,<source2>`` - phase of source1 relative to source2 in degrees."""
+        return self.query_float(f":MEASure:PHASe? {source1},{source2}", sim_value=0.0)
+
+    def set_delay_definition(
+        self,
+        slope1: str = "rising",
+        edge1: int = 0,
+        threshold1: str = "middle",
+        slope2: str = "rising",
+        edge2: int = 0,
+        threshold2: str = "middle",
+    ) -> None:
+        """``:MEASure:DELay:DEFine <slope1>,<edge1>,<threshold1>,<slope2>,<edge2>,<threshold2>``.
+
+        Slopes ``{RISing|FALLing}`` and thresholds ``{LOWer|MIDDle|UPPer}`` apply
+        to both delay modes; the edge numbers (1..1000, counted from the left
+        screen edge) only to ``MANual``. Edge number 0 selects the edge closest
+        to the timebase reference and must then be 0 for both sources.
+        """
+        slopes = {"RISING": "RISing", "RIS": "RISing", "FALLING": "FALLing", "FALL": "FALLing"}
+        thresholds = {
+            "LOWER": "LOWer",
+            "LOW": "LOWer",
+            "MIDDLE": "MIDDle",
+            "MIDD": "MIDDle",
+            "UPPER": "UPPer",
+            "UPP": "UPPer",
+        }
+        specs = []
+        for slope, edge, threshold in ((slope1, edge1, threshold1), (slope2, edge2, threshold2)):
+            slope_mnemonic = slopes.get(slope.strip().upper())
+            if slope_mnemonic is None:
+                msg = f"Invalid delay edge slope {slope!r}; allowed: rising, falling"
+                raise ValueError(msg)
+            threshold_mnemonic = thresholds.get(threshold.strip().upper())
+            if threshold_mnemonic is None:
+                msg = f"Invalid delay edge threshold {threshold!r}; allowed: lower, middle, upper"
+                raise ValueError(msg)
+            if not 0 <= edge <= 1000:
+                msg = f"Delay edge number must be 0..1000, got {edge}"
+                raise ValueError(msg)
+            specs.append(f"{slope_mnemonic},{edge},{threshold_mnemonic}")
+        if (edge1 == 0) != (edge2 == 0):
+            msg = f"Delay edge numbers must both be 0 (auto) or both 1..1000, got {edge1} and {edge2}"
+            raise ValueError(msg)
+        self.write(f":MEASure:DELay:DEFine {','.join(specs)}")
+
+    def measure_delay(self, source1: str, source2: str, auto_edges: bool = True) -> float:
+        """``:MEASure:DELay? {AUTO|MANual},<source1>,<source2>`` - delay source1 -> source2 in seconds.
+
+        ``AUTO`` uses the source1 edge closest to the timebase reference and the
+        nearest source2 edge; ``MANual`` the edge numbers set with
+        :meth:`set_delay_definition` (the manual's default for the query when the
+        mode is omitted). Slopes and thresholds always come from
+        :meth:`set_delay_definition`.
+        """
+        mode = "AUTO" if auto_edges else "MANual"
+        return self.query_float(f":MEASure:DELay? {mode},{source1},{source2}", sim_value=0.0)
 
 
 class KeysightDSOX3000T(InstrumentApplication[KeysightDSOX3000TLowLevel]):
@@ -385,6 +498,15 @@ class KeysightDSOX3000T(InstrumentApplication[KeysightDSOX3000TLowLevel]):
         """Automatic setup for the connected signals (like the front panel key)."""
         self._lowlevel.autoscale()
 
+    @property
+    def installed_options(self) -> list[str]:
+        """Names of the installed licenses (``*OPT?``), e.g. ``["MEMUP", "WAVEGEN"]``.
+
+        Digital channels need the ``MSO`` license.
+        """
+        response = self._lowlevel.get_installed_options()
+        return [name for name in (field.strip() for field in response.split(",")) if name not in {"", "0"}]
+
     # -- setup -------------------------------------------------------------------
 
     def setup_channel(
@@ -395,11 +517,18 @@ class KeysightDSOX3000T(InstrumentApplication[KeysightDSOX3000TLowLevel]):
         coupling: str | None = None,
         probe_attenuation: float | None = None,
         display: bool | None = None,
+        label: str | None = None,
     ) -> None:
-        """Basic vertical setup of one analog channel (only given values are set)."""
+        """Basic vertical setup of one analog channel (only given values are set).
+
+        A ``label`` is also switched visible on screen (``:DISPlay:LABel ON``).
+        """
         lowlevel = self._lowlevel
         if display is not None:
             lowlevel.set_channel_display(channel, display)
+        if label is not None:
+            lowlevel.set_channel_label(channel, label)
+            lowlevel.set_display_labels(True)
         if probe_attenuation is not None:
             lowlevel.set_channel_probe(channel, probe_attenuation)
         if coupling is not None:
@@ -584,3 +713,75 @@ class KeysightDSOX3000T(InstrumentApplication[KeysightDSOX3000TLowLevel]):
         """Average voltage of the displayed signal."""
         with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
             return self._lowlevel.measure_vaverage(self._source_name(channel))
+
+    def measure_vrms(self, channel: int | str = 1, ac: bool = False) -> float:
+        """RMS voltage of the displayed signal (``ac=True``: DC component removed)."""
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_vrms(self._source_name(channel), ac)
+
+    def measure_vmax(self, channel: int | str = 1) -> float:
+        """Maximum voltage of the displayed signal."""
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_vmax(self._source_name(channel))
+
+    def measure_vmin(self, channel: int | str = 1) -> float:
+        """Minimum voltage of the displayed signal."""
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_vmin(self._source_name(channel))
+
+    def measure_period(self, channel: int | str = 1) -> float:
+        """Period of the displayed signal in seconds."""
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_period(self._source_name(channel))
+
+    def measure_rise_time(self, channel: int | str = 1) -> float:
+        """Rise time of the rising edge closest to the timebase reference, in seconds."""
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_rise_time(self._source_name(channel))
+
+    def measure_fall_time(self, channel: int | str = 1) -> float:
+        """Fall time of the falling edge closest to the timebase reference, in seconds."""
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_fall_time(self._source_name(channel))
+
+    def measure_duty_cycle(self, channel: int | str = 1) -> float:
+        """Positive duty cycle of the displayed signal in percent."""
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_duty_cycle(self._source_name(channel))
+
+    def measure_phase(self, channel1: int | str = 1, channel2: int | str = 2) -> float:
+        """Phase of ``channel1`` relative to ``channel2`` in degrees."""
+        with self._lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return self._lowlevel.measure_phase(self._source_name(channel1), self._source_name(channel2))
+
+    def measure_delay(
+        self,
+        channel1: int | str = 1,
+        channel2: int | str = 2,
+        edge1: int = 0,
+        edge2: int = 0,
+        slope1: str = "rising",
+        slope2: str = "rising",
+        threshold1: str = "middle",
+        threshold2: str = "middle",
+    ) -> float:
+        """Delay from a ``channel1`` edge to a ``channel2`` edge, in seconds.
+
+        Args:
+            channel1: Reference channel.
+            channel2: Delayed channel.
+            edge1: Edge number of ``channel1``, counted from the left screen
+                edge (1..1000). 0 (default) uses the edge closest to the
+                timebase reference and the nearest ``channel2`` edge.
+            edge2: Edge number of ``channel2``; must be 0 exactly when ``edge1`` is.
+            slope1: ``"rising"`` or ``"falling"`` edge on ``channel1``.
+            slope2: ``"rising"`` or ``"falling"`` edge on ``channel2``.
+            threshold1: ``"lower"``, ``"middle"`` or ``"upper"`` threshold on ``channel1``.
+            threshold2: ``"lower"``, ``"middle"`` or ``"upper"`` threshold on ``channel2``.
+        """
+        lowlevel = self._lowlevel
+        lowlevel.set_delay_definition(slope1, edge1, threshold1, slope2, edge2, threshold2)
+        with lowlevel.temporary_timeout(TRANSFER_TIMEOUT_MS):
+            return lowlevel.measure_delay(
+                self._source_name(channel1), self._source_name(channel2), auto_edges=edge1 == 0
+            )

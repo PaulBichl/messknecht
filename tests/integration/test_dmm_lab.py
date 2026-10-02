@@ -61,6 +61,23 @@ def test_voltage_dc_triggered_mode(dmm: Keysight34450A) -> None:
     assert -10.5 <= fetched <= 10.5
 
 
+def test_voltage_dc_samples(dmm: Keysight34450A) -> None:
+    dmm.configure.voltage_dc(range=10)
+    samples = dmm.read_samples(20, timeout_ms=20000)
+    print(
+        f"\n20 samples: mean={samples.mean:.6g} V, std={samples.std:.3g} V, min={samples.min:.6g}, max={samples.max:.6g}"
+    )
+    assert samples.values.size == 20
+    assert -10.5 <= dmm.read() <= 10.5  # sample count is back to 1
+
+
+def test_voltage_dc_samples_triggered(dmm: Keysight34450A) -> None:
+    dmm.configure.voltage_dc(range=10, continuous=False)
+    samples = dmm.read_samples(5, timeout_ms=20000)
+    print(f"\n5 samples (BUS trigger): {[f'{value:.6g}' for value in samples.values]}")
+    assert samples.values.size == 5
+
+
 def test_configuration_query(dmm: Keysight34450A) -> None:
     dmm.configure.voltage_dc(range=10)
     configuration = dmm.lowlevel.get_configuration()

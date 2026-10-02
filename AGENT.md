@@ -49,7 +49,8 @@ docs/                         # user-guide.md, developer-guide.md
 
 - Low level drivers subclass `VisaInstrument`; **one method ≈ one SCPI command**,
   docstring names the exact command. All I/O through the typed helpers
-  (`write`, `query`, `query_float`, `query_bool`, `query_binary_block`) —
+  (`write`, `query`, `query_float`, `query_float_list`, `query_bool`,
+  `query_binary_block`) —
   never touch the pyvisa resource directly.
 - Application classes subclass `InstrumentApplication[TheLowLevel]` and own
   `self._lowlevel`; they compose low level calls and call `check_errors()`

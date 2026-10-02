@@ -26,7 +26,7 @@ from messknecht.core.exceptions import (
 )
 from messknecht.core.instrument import InstrumentApplication, VisaInstrument
 from messknecht.instruments.keysight_33500b import Keysight33500B, Keysight33500BLowLevel
-from messknecht.instruments.keysight_34450a import Keysight34450A, Keysight34450ALowLevel
+from messknecht.instruments.keysight_34450a import DmmSamples, Keysight34450A, Keysight34450ALowLevel
 from messknecht.instruments.keysight_dsox3000t import (
     KeysightDSOX3000T,
     KeysightDSOX3000TLowLevel,
@@ -38,6 +38,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "CurrentRange",
+    "DmmSamples",
     "InstrumentApplication",
     "InstrumentCommandError",
     "InstrumentConnectionError",

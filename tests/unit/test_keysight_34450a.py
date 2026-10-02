@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import pytest
 
-from messknecht import OverloadError
+from messknecht import InstrumentDataError, OverloadError
 
 if TYPE_CHECKING:
     from messknecht import Keysight34450A
@@ -113,3 +114,51 @@ def test_get_configuration_queries_and_returns_the_response(sim_dmm: Keysight344
     configuration = sim_dmm.lowlevel.get_configuration()
     assert "CONFigure?" in _log(sim_dmm)
     assert "VOLT" in configuration
+
+
+def test_read_samples_continuous(sim_dmm: Keysight34450A) -> None:
+    sim_dmm.configure.voltage_dc()
+    samples = sim_dmm.read_samples(10)
+    assert samples.values.size == 10
+    assert samples.mean == pytest.approx(1.0, abs=0.1)
+    assert samples.std >= 0.0
+    assert samples.min <= samples.mean <= samples.max
+    log = _log(sim_dmm)
+    assert log[-3:] == ["SAMPle:COUNt 10", "READ?", "SAMPle:COUNt 1"]
+
+
+def test_read_samples_triggered(sim_dmm: Keysight34450A) -> None:
+    sim_dmm.configure.voltage_dc(continuous=False)
+    samples = sim_dmm.read_samples(5)
+    assert samples.values.size == 5
+    log = _log(sim_dmm)
+    assert log[-5:] == ["SAMPle:COUNt 5", "INITiate", "*TRG", "FETCh?", "SAMPle:COUNt 1"]
+
+
+def test_read_samples_single_reading_has_nan_std(sim_dmm: Keysight34450A) -> None:
+    sim_dmm.configure.voltage_dc()
+    assert math.isnan(sim_dmm.read_samples(1).std)
+
+
+def test_read_samples_invalid_count_raises(sim_dmm: Keysight34450A) -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        sim_dmm.read_samples(0)
+
+
+def test_read_samples_wrong_reading_count_raises(sim_dmm: Keysight34450A) -> None:
+    simulation = sim_dmm.lowlevel.simulation
+    assert simulation is not None
+    simulation.backend.handle_query = lambda command: "+1.0E+00,+2.0E+00"  # type: ignore[method-assign]
+    sim_dmm.configure.voltage_dc()
+    with pytest.raises(InstrumentDataError, match="2 readings, expected 3"):
+        sim_dmm.read_samples(3)
+    assert _log(sim_dmm)[-1] == "SAMPle:COUNt 1"
+
+
+def test_read_samples_overload_raises(sim_dmm: Keysight34450A) -> None:
+    simulation = sim_dmm.lowlevel.simulation
+    assert simulation is not None
+    simulation.backend.handle_query = lambda command: "+1.0E+00,+9.9E+37"  # type: ignore[method-assign]
+    sim_dmm.configure.voltage_dc()
+    with pytest.raises(OverloadError):
+        sim_dmm.read_samples(2)

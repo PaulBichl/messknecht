@@ -65,5 +65,27 @@ def test_waveform_measurement(scope: KeysightDSOX3000T) -> None:
     assert vpp > 0.0  # a flat line means nothing is connected to CH1
 
 
+def test_more_measurements(scope: KeysightDSOX3000T) -> None:
+    print(
+        f"\nCH1: Vrms={scope.measure_vrms(1):.4g} V, Vmax={scope.measure_vmax(1):.4g} V, "
+        f"Vmin={scope.measure_vmin(1):.4g} V, T={scope.measure_period(1):.4g} s, "
+        f"rise={scope.measure_rise_time(1):.4g} s, fall={scope.measure_fall_time(1):.4g} s, "
+        f"duty={scope.measure_duty_cycle(1):.4g} % (please sanity check)"
+    )
+    # Phase/delay need a signal on CH2 as well; 9.9E+37 means "no valid measurement".
+    print(f"CH1->CH2: phase={scope.measure_phase(1, 2):.4g} deg, delay={scope.measure_delay(1, 2):.4g} s")
+
+
+def test_channel_label(scope: KeysightDSOX3000T) -> None:
+    scope.setup_channel(1, label="MESSKNECHT")
+    print("\nCH1 label set to 'MESSKNECHT' - please check the scope screen")
+
+
+def test_installed_options(scope: KeysightDSOX3000T) -> None:
+    options = scope.installed_options
+    print(f"\nInstalled options: {options}")
+    assert all(option != "0" for option in options)
+
+
 def test_no_pending_instrument_errors(scope: KeysightDSOX3000T) -> None:
     scope.check_errors()

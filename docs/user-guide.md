@@ -146,6 +146,31 @@ with KeysightDSOX3000T() as scope:
     print(scope.measure_vpp(1), scope.measure_frequency(1))
 ```
 
+Measurements (all take a channel number, default 1, and wait for a complete
+acquisition): `measure_vpp`, `measure_vmax`, `measure_vmin`, `measure_vaverage`,
+`measure_vrms` (`ac=True` removes the DC part), `measure_frequency`,
+`measure_period`, `measure_duty_cycle` (%), `measure_rise_time`,
+`measure_fall_time`, and between two channels `measure_phase(1, 2)` (degrees)
+and `measure_delay(1, 2)` (seconds, `t(channel2 edge) - t(channel1 edge)`).
+A measurement the scope cannot make (e.g. no edge on screen) returns `9.9e37`.
+
+`measure_delay` always sets the delay edges first (`:MEASure:DELay:DEFine`),
+so the result does not depend on what was configured at the front panel:
+
+- `slope1`/`slope2`: `"rising"` (default) or `"falling"`.
+- `threshold1`/`threshold2`: `"lower"`, `"middle"` (default) or `"upper"` -
+  the scope's measurement thresholds, 10/50/90 % of Vbase..Vtop unless
+  changed at the scope.
+- `edge1`/`edge2`: 0 (default) uses the `channel1` edge closest to the
+  timebase reference and the nearest `channel2` edge. 1..1000 picks the n-th
+  edge counted from the left screen edge. Either both are 0 or neither.
+
+```python
+scope.measure_delay(1, 2)                    # rising -> rising, 50 %
+scope.measure_delay(1, 2, slope2="falling")  # rising -> falling
+scope.measure_delay(1, 2, edge1=1, edge2=2)  # 1st CH1 edge -> 2nd CH2 edge
+```
+
 Notes:
 
 - `save_waveform_csv(..., acquire=True)` (default) runs one fresh acquisition
@@ -155,9 +180,11 @@ Notes:
 - `get_waveform(channel)` returns time/voltage numpy arrays if you want the
   data instead of a file.
 - Basic setup helpers exist if you need them:
-  `setup_channel(1, scale=0.5, coupling="dc")`, `setup_timebase(scale=1e-3)`,
+  `setup_channel(1, scale=0.5, coupling="dc", label="VOUT")`, `setup_timebase(scale=1e-3)`,
   `setup_edge_trigger(source=1, level=0.5, slope="positive")`, `autoscale()`,
   `run()/stop()/single()/digitize()`.
+- `scope.installed_options` lists the installed licenses (e.g. `WAVEGEN`,
+  `MEMUP`). Digital channels need the `MSO` license and are not wrapped.
 
 ## Waveform generator — Keysight 33500B
 
@@ -225,6 +252,11 @@ with Keysight34450A() as dmm:
     # triggered: measure only on demand (BUS trigger)
     dmm.configure.voltage_dc(range=10, continuous=False)
     print(dmm.read())              # arms, software-triggers, fetches
+
+    # several readings per trigger + statistics (works in both modes)
+    samples = dmm.read_samples(50, timeout_ms=30000)
+    print(samples.mean, samples.std, samples.min, samples.max)
+    print(samples.values)          # numpy array of all readings
 ```
 
 - Ranges (V DC): 0.1, 1, 10, 100, 1000 or `"AUTO"`; resolutions: `3.0e-5`,
@@ -232,6 +264,9 @@ with Keysight34450A() as dmm:
 - Other functions: `configure.voltage_ac / current_dc / current_ac /
   resistance / resistance_4wire / frequency / capacitance / continuity / diode`.
 - An over-range measurement raises `OverloadError` instead of returning 9.9e37.
+- `read_samples(n)` takes the readings back to back (`SAMPle:COUNt n`) and
+  sets the sample count back to 1 afterwards. Allow for `n` times the time of
+  one reading in `timeout_ms`. `std` is the sample standard deviation.
 
 ## Simulation mode
 
@@ -247,7 +282,7 @@ return a plausible default with a little noise, and the scope produces a fixed
 sine wave and placeholder screenshots. It deliberately does **not** model
 device state, so setpoints do not round-trip, and most string readbacks
 (e.g. `FUNCtion?`) raise `SimulationError` — the few that are simulated
-(`CONFigure?`, the scope's waveform preamble) return a fixed canned response
+(`CONFigure?`, the scope's waveform preamble and `*OPT?`) return a fixed canned response
 that does not reflect what you configured.
 Use it to check that a script *runs* and sends the right commands; confirm real
 values on hardware.

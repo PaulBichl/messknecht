@@ -304,6 +304,20 @@ class VisaInstrument:
             response = self.query(command)
         return parse_last_float(response)
 
+    def query_float_list(self, command: str, sim_count: int = 1, sim_value: float = 1.0) -> list[float]:
+        """Query comma separated floats. In simulation, unhandled queries return ``sim_count`` noisy values."""
+        if self._simulation is not None:
+            response = self._query_simulated(command)
+            if response is None:
+                return [sim_float(sim_value) for _ in range(sim_count)]
+        else:
+            response = self.query(command)
+        try:
+            return [float(field) for field in response.split(",")]
+        except ValueError as exc:
+            msg = f"Expected comma separated numbers as response to {command!r}, got {response!r}"
+            raise InstrumentDataError(msg) from exc
+
     def query_int(self, command: str, sim_value: int = 0) -> int:
         """Query an integer. In simulation, unhandled queries return ``sim_value``."""
         if self._simulation is not None:
